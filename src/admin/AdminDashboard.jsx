@@ -7,11 +7,11 @@ import {
   Plus, Trash, PenSquare, XCircle, TrendingUp, DollarSign, ShoppingBag, 
   ShieldCheck, Menu, X, Sparkles, Clock, Leaf, Zap, Star, Heart, Search, 
   Image as ImageIcon, ChevronRight, ChevronLeft, CheckCircle, AlertCircle, Settings, 
-  FileText, User, Bell, Lock, Eye, Printer, Receipt
+  FileText, User, Bell, Lock, Eye, Printer, Receipt, UploadCloud, Loader2
 } from 'lucide-react';
 
 // ==========================================
-// 1. UTILS
+// 1. UTILITY & HELPER FUNCTIONS
 // ==========================================
 
 const formatCurrency = (value) => {
@@ -27,7 +27,7 @@ const formatDate = (dateString) => {
 };
 
 // ==========================================
-// 2. UI COMPONENTS
+// 2. REUSABLE UI COMPONENTS
 // ==========================================
 
 const Card = ({ children, className = "", noPadding = false }) => (
@@ -99,6 +99,61 @@ const TextAreaField = ({ label, ...props }) => (
     />
   </div>
 );
+
+// --- NEW: IMAGE UPLOADER COMPONENT ---
+const ImageUploader = ({ label, value, onUpload, loading }) => {
+  return (
+    <div className="space-y-2">
+      {label && <label className="text-[11px] font-extrabold text-gray-400 uppercase tracking-widest ml-1">{label}</label>}
+      
+      <div className="relative group">
+        <input 
+          type="file" 
+          accept="image/*"
+          disabled={loading}
+          onChange={onUpload}
+          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10 disabled:cursor-not-allowed"
+        />
+        
+        <div className={`w-full p-4 border-2 border-dashed rounded-2xl transition-all flex items-center justify-center gap-4 
+          ${value ? 'border-emerald-200 bg-emerald-50/30' : 'border-gray-200 bg-gray-50 hover:bg-gray-100'}
+        `}>
+            {loading ? (
+                <div className="flex items-center gap-2 text-emerald-600 font-bold py-4">
+                    <Loader2 size={24} className="animate-spin"/> Sedang Mengupload...
+                </div>
+            ) : value ? (
+                <div className="flex items-center gap-4 w-full">
+                    <img src={value} alt="Preview" className="w-16 h-16 object-cover rounded-xl shadow-sm border border-emerald-100"/>
+                    <div className="flex-1 overflow-hidden">
+                        <p className="text-xs font-bold text-emerald-700 truncate">Gambar berhasil dipilih</p>
+                        <p className="text-[10px] text-emerald-500/70">Klik untuk ganti gambar</p>
+                    </div>
+                    <CheckCircle className="text-emerald-500" size={24}/>
+                </div>
+            ) : (
+                <div className="flex flex-col items-center py-4 text-gray-400">
+                    <UploadCloud size={32} className="mb-2 text-gray-300"/>
+                    <p className="text-xs font-bold">Klik untuk Upload Foto</p>
+                    <p className="text-[10px] opacity-60">JPG, PNG, atau WebP</p>
+                </div>
+            )}
+        </div>
+      </div>
+      
+      {/* Fallback Input Manual URL */}
+      {!loading && (
+           <input 
+             type="text" 
+             placeholder="Atau tempel link gambar (https://...)" 
+             value={value || ''} 
+             onChange={(e) => onUpload(e.target.value, true)} // Kirim string jika manual input
+             className="w-full p-3 text-xs bg-gray-50 rounded-xl border border-gray-100 text-gray-500 focus:bg-white outline-none"
+           />
+      )}
+    </div>
+  );
+};
 
 const Modal = ({ isOpen, onClose, title, children }) => (
   <AnimatePresence>
@@ -175,66 +230,59 @@ export default function AdminDashboard() {
   const [selectedItems, setSelectedItems] = useState([]);
   const [viewMode, setViewMode] = useState('grid');
 
-  // Modal & Form
+  // Modal, Form & Upload
   const [modalConfig, setModalConfig] = useState({ isOpen: false, type: null, data: null });
   const [formData, setFormData] = useState({});
+  const [isUploading, setIsUploading] = useState(false); // New state for upload
 
   // 1. INIT & AUTH CHECK
   useEffect(() => {
     const checkAuthAndFetch = async () => {
       const { data: { session } } = await supabase.auth.getSession();
-      
       if (!session) {
         navigate('/admin/login');
         return;
       }
-      
       setIsAuthChecking(false);
       await fetchAllData();
     };
-    
     checkAuthAndFetch();
   }, []);
 
-  // 2. FETCH DATA (ROBUST VERSION)
   const fetchAllData = async () => {
     setIsLoading(true);
     try {
-      // Fetch satu-satu agar jika satu tabel error, yang lain tetap muncul (Safe Mode)
-      const { data: prod } = await supabase.from('products').select('*').order('id');
-      const { data: ord } = await supabase.from('orders').select('*').order('created_at', { ascending: false });
-      const { data: team } = await supabase.from('team_members').select('*').order('id');
-      const { data: feat } = await supabase.from('features').select('*').order('id');
-      const { data: feed } = await supabase.from('feedbacks').select('*').order('created_at', { ascending: false });
+      const [prod, ord, team, feat, feed] = await Promise.all([
+        supabase.from('products').select('*').order('id'),
+        supabase.from('orders').select('*').order('created_at', { ascending: false }),
+        supabase.from('team_members').select('*').order('id'),
+        supabase.from('features').select('*').order('id'),
+        supabase.from('feedbacks').select('*').order('created_at', { ascending: false })
+      ]);
 
-      const safeOrders = ord || [];
-      const safeProducts = prod || [];
+      const safeOrders = ord.data || [];
+      const safeProducts = prod.data || [];
 
       setDataStore({
         products: safeProducts,
         orders: safeOrders,
-        teams: team || [],
-        features: feat || [],
-        feedbacks: feed || []
+        teams: team.data || [],
+        features: feat.data || [],
+        feedbacks: feed.data || []
       });
 
       let totalRev = 0;
       safeOrders.forEach(o => totalRev += parseInt(o.total_price?.replace(/[^0-9]/g, '') || 0));
-      setStats({ 
-        revenue: totalRev, 
-        totalOrders: safeOrders.length, 
-        totalMenus: safeProducts.length 
-      });
+      setStats({ revenue: totalRev, totalOrders: safeOrders.length, totalMenus: safeProducts.length });
 
     } catch (error) {
-      console.error("Fetch Error:", error);
-      showToast("Gagal memuat sebagian data. Cek konsol.", "error");
+      showToast("Gagal memuat data: " + error.message, "error");
     } finally {
       setIsLoading(false);
     }
   };
 
-  // 3. ACTIONS & HELPERS
+  // 2. HELPERS
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3000);
@@ -250,6 +298,7 @@ export default function AdminDashboard() {
   const closeModal = () => {
     setModalConfig({ isOpen: false, type: null, data: null });
     setFormData({});
+    setIsUploading(false);
   };
 
   const toggleSelect = (id) => {
@@ -257,7 +306,49 @@ export default function AdminDashboard() {
     else setSelectedItems([...selectedItems, id]);
   };
 
-  // 4. CRUD OPERATIONS
+  // --- FILE UPLOAD HANDLER ---
+  const handleImageUpload = async (event, isManualUrl = false) => {
+     // Jika input manual (text string)
+     if (isManualUrl) {
+         setFormData({ ...formData, image_url: event });
+         return;
+     }
+
+     // Jika input file
+     const file = event.target.files[0];
+     if (!file) return;
+
+     setIsUploading(true);
+     try {
+         const fileExt = file.name.split('.').pop();
+         const fileName = `${Date.now()}.${fileExt}`;
+         const filePath = `${fileName}`;
+
+         // 1. Upload ke Supabase Storage (Bucket 'images')
+         const { error: uploadError } = await supabase.storage
+             .from('images')
+             .upload(filePath, file);
+
+         if (uploadError) throw uploadError;
+
+         // 2. Dapatkan Public URL
+         const { data: { publicUrl } } = supabase.storage
+             .from('images')
+             .getPublicUrl(filePath);
+
+         // 3. Set ke Form Data
+         setFormData({ ...formData, image_url: publicUrl });
+         showToast("Gambar berhasil diupload!", "success");
+
+     } catch (error) {
+         console.error("Upload error:", error);
+         showToast("Gagal upload gambar: " + error.message, "error");
+     } finally {
+         setIsUploading(false);
+     }
+  };
+
+  // 3. CRUD OPERATIONS
   const handleSubmit = async (e, table) => {
     e.preventDefault();
     const payload = { ...formData };
@@ -315,7 +406,6 @@ export default function AdminDashboard() {
     if (error) showToast('Gagal update status', 'error');
     else {
         showToast(`Status order #${id} diubah ke ${newStatus}`, 'success');
-        // Optimistic update
         setDataStore(prev => ({
             ...prev,
             orders: prev.orders.map(o => o.id === id ? { ...o, status: newStatus } : o)
@@ -326,7 +416,7 @@ export default function AdminDashboard() {
     }
   };
 
-  // 5. FILTERING & PAGINATION
+  // 4. FILTERING & PAGINATION
   const getFilteredData = () => {
     let data = [];
     if (activeTab === 'menu') data = dataStore.products;
@@ -353,7 +443,7 @@ export default function AdminDashboard() {
 
   useEffect(() => { setCurrentPage(1); setSearchTerm(""); setSelectedItems([]); }, [activeTab]);
 
-  // 6. UI HELPERS
+  // 5. RENDER UI HELPERS
   const SidebarLink = ({ id, icon, label }) => (
     <button 
       onClick={() => { setActiveTab(id); setIsMobileMenuOpen(false); }}
@@ -392,13 +482,14 @@ export default function AdminDashboard() {
             modalConfig.data ? `Edit ${modalConfig.type}` : `Tambah ${modalConfig.type}`
           }
         >
-          {/* 1. ORDER DETAIL */}
+          {/* 1. ORDER DETAIL (STRUK STYLE) */}
           {modalConfig.type === 'order_detail' && modalConfig.data && (
              <div className="flex flex-col h-full">
                 <div className="bg-gray-50 p-6 rounded-xl border border-gray-200 font-mono text-sm relative overflow-hidden">
                     <div className="absolute -bottom-3 left-0 w-full h-6 bg-white" style={{ maskImage: 'radial-gradient(circle, transparent 50%, black 50%)', maskSize: '20px 20px', maskRepeat: 'repeat-x' }}></div>
                     <div className="text-center border-b-2 border-dashed border-gray-300 pb-4 mb-4">
                         <h2 className="text-xl font-black text-gray-800 uppercase tracking-widest">Upgradeats</h2>
+                        <p className="text-xs text-gray-500">Gedung Serbaguna Kampus</p>
                         <p className="text-xs text-gray-500">Order ID: #{modalConfig.data.id}</p>
                         <p className="text-xs text-gray-500">{new Date(modalConfig.data.created_at).toLocaleString()}</p>
                     </div>
@@ -423,6 +514,7 @@ export default function AdminDashboard() {
                         <div className={`inline-block px-3 py-1 rounded text-xs font-bold uppercase border ${modalConfig.data.status === 'Selesai' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : modalConfig.data.status === 'Dibatalkan' ? 'bg-red-100 text-red-700 border-red-200' : 'bg-yellow-100 text-yellow-700 border-yellow-200'}`}>
                             {modalConfig.data.status}
                         </div>
+                        <p className="text-xs text-gray-400 mt-2">Terima kasih telah berbelanja!</p>
                     </div>
                 </div>
                 <div className="pt-6 mt-auto flex flex-col gap-3">
@@ -439,7 +531,7 @@ export default function AdminDashboard() {
              </div>
           )}
 
-          {/* 2. MENU FORM */}
+          {/* 2. MENU FORM (WITH IMAGE UPLOAD) */}
           {modalConfig.type === 'Product' && (
              <form onSubmit={(e)=>handleSubmit(e, 'products')} className="space-y-5">
                 <div className="grid grid-cols-2 gap-5">
@@ -448,12 +540,20 @@ export default function AdminDashboard() {
                 </div>
                 <div className="grid grid-cols-2 gap-5">
                     <InputField label="Kategori" required value={formData.category||''} onChange={e=>setFormData({...formData, category:e.target.value})} />
-                    <InputField label="Image URL" required value={formData.image_url||''} onChange={e=>setFormData({...formData, image_url:e.target.value})} />
                 </div>
+                
+                {/* Image Uploader for Menu */}
+                <ImageUploader 
+                    label="Foto Menu" 
+                    value={formData.image_url} 
+                    loading={isUploading}
+                    onUpload={handleImageUpload} 
+                />
+
                 <TextAreaField label="Deskripsi" value={formData.description||''} onChange={e=>setFormData({...formData, description:e.target.value})} />
                 <div className="flex justify-end gap-3 pt-4">
                     <Button type="button" variant="secondary" onClick={closeModal}>Batal</Button>
-                    <Button type="submit" icon={CheckCircle}>Simpan Menu</Button>
+                    <Button type="submit" icon={CheckCircle} disabled={isUploading}>{isUploading ? 'Mengupload...' : 'Simpan Menu'}</Button>
                 </div>
              </form>
           )}
@@ -481,18 +581,26 @@ export default function AdminDashboard() {
              </form>
           )}
 
-          {/* 4. TEAM FORM */}
+          {/* 4. TEAM FORM (WITH IMAGE UPLOAD) */}
           {modalConfig.type === 'Team' && (
              <form onSubmit={(e)=>handleSubmit(e, 'team_members')} className="space-y-5">
                 <div className="grid grid-cols-2 gap-5">
                     <InputField label="Nama Lengkap" required value={formData.name||''} onChange={e=>setFormData({...formData, name:e.target.value})} />
                     <InputField label="Jabatan" required value={formData.role||''} onChange={e=>setFormData({...formData, role:e.target.value})} />
                 </div>
-                <InputField label="Foto Profil URL" required value={formData.image_url||''} onChange={e=>setFormData({...formData, image_url:e.target.value})} />
+                
+                {/* Image Uploader for Team */}
+                <ImageUploader 
+                    label="Foto Profil" 
+                    value={formData.image_url} 
+                    loading={isUploading}
+                    onUpload={handleImageUpload} 
+                />
+
                 <TextAreaField label="Quote / Motto" required value={formData.quote||''} onChange={e=>setFormData({...formData, quote:e.target.value})} />
                 <div className="flex justify-end gap-3 pt-4">
                     <Button type="button" variant="secondary" onClick={closeModal}>Batal</Button>
-                    <Button type="submit" icon={CheckCircle}>Simpan Anggota</Button>
+                    <Button type="submit" icon={CheckCircle} disabled={isUploading}>{isUploading ? 'Mengupload...' : 'Simpan Anggota'}</Button>
                 </div>
              </form>
           )}
@@ -505,6 +613,7 @@ export default function AdminDashboard() {
         ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
       `}>
         <div className="p-6 overflow-y-auto custom-scrollbar">
+            {/* Logo */}
             <div className="flex items-center gap-3 mb-10 px-2 mt-4">
                 <div className="w-10 h-10 bg-gradient-to-br from-amber-400 to-amber-600 rounded-xl flex items-center justify-center text-emerald-950 shadow-lg shadow-amber-500/20">
                     <Sparkles size={20} fill="currentColor"/>
@@ -515,6 +624,7 @@ export default function AdminDashboard() {
                 </div>
             </div>
 
+            {/* Navigation */}
             <nav className="space-y-1">
                 <div className="px-4 mb-3 text-[10px] font-bold text-emerald-600 uppercase tracking-widest">Main</div>
                 <SidebarLink id="overview" icon={<LayoutDashboard size={18}/>} label="Overview" />
@@ -531,6 +641,7 @@ export default function AdminDashboard() {
             </nav>
         </div>
         
+        {/* User Profile */}
         <div className="p-4 border-t border-white/5 bg-[#01221a] m-4 rounded-2xl flex items-center gap-3 cursor-pointer hover:bg-white/5 transition">
              <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-emerald-400 to-emerald-600 flex items-center justify-center text-white font-bold shadow-lg">SA</div>
              <div className="flex-1 min-w-0">
@@ -564,7 +675,7 @@ export default function AdminDashboard() {
             </div>
         </header>
 
-        {/* CONTENT */}
+        {/* CONTENT BODY */}
         <main className="flex-1 overflow-y-auto p-6 md:p-10 scroll-smooth bg-[#FDFCF8]">
             <div className="max-w-7xl mx-auto pb-24">
                 <AnimatePresence mode="wait">
@@ -576,7 +687,7 @@ export default function AdminDashboard() {
                     ) : (
                         <motion.div initial={{opacity:0, y:10}} animate={{opacity:1, y:0}} exit={{opacity:0}} transition={{duration:0.4}}>
                             
-                            {/* --- OVERVIEW --- */}
+                            {/* --- 1. OVERVIEW --- */}
                             {activeTab === 'overview' && (
                                 <div className="space-y-8">
                                     <div className="bg-[#022c22] rounded-[2.5rem] p-10 text-white shadow-2xl relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-8">
@@ -590,7 +701,7 @@ export default function AdminDashboard() {
                                             </div>
                                         </div>
                                         <div className="relative">
-                                            <div className="absolute inset-0 bg-emerald-500/30 blur-[80px] rounded-full animate-pulse"></div>
+                                            <div className="absolute inset-0 bg-emerald-500/20 blur-[60px] rounded-full"></div>
                                             <div className="w-64 h-40 bg-white/5 rounded-2xl backdrop-blur-md border border-white/10 flex items-center justify-center">
                                                 <TrendingUp size={64} className="text-emerald-400/50"/>
                                             </div>
@@ -615,7 +726,7 @@ export default function AdminDashboard() {
                                 </div>
                             )}
 
-                            {/* --- CRUD TABS --- */}
+                            {/* --- 2. CRUD TABS --- */}
                             {['menu', 'team', 'features'].includes(activeTab) && (
                                 <div className="space-y-6">
                                     <div className="flex justify-between items-center bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
@@ -660,6 +771,7 @@ export default function AdminDashboard() {
                                                     <div className="flex-1 min-w-0 text-center md:text-left">
                                                         <h4 className="font-extrabold text-gray-800 text-lg truncate">{item.name || item.title}</h4>
                                                         <p className="text-emerald-600 font-bold text-sm">{activeTab === 'menu' ? item.price : (item.role || 'Fitur Unggulan')}</p>
+                                                        {viewMode === 'grid' && <p className="text-gray-400 text-xs mt-2 line-clamp-2">{item.description || item.text || item.quote}</p>}
                                                     </div>
 
                                                     <div className={`flex gap-2 ${viewMode === 'grid' ? 'mt-6 pt-4 border-t border-gray-50 justify-center' : 'ml-auto'}`}>
@@ -670,7 +782,6 @@ export default function AdminDashboard() {
                                             ))}
                                         </div>
                                     )}
-                                    {/* Pagination Controls */}
                                     <div className="flex justify-center gap-4 mt-8 items-center">
                                         <button disabled={currentPage===1} onClick={()=>setCurrentPage(p=>p-1)} className="p-2 rounded-full hover:bg-gray-100 disabled:opacity-30"><ChevronLeft/></button>
                                         <span className="text-sm font-bold text-gray-500">Halaman {currentPage} dari {pageCount}</span>
@@ -679,7 +790,7 @@ export default function AdminDashboard() {
                                 </div>
                             )}
 
-                            {/* --- ORDERS & FEEDBACKS TABS --- */}
+                            {/* --- ORDERS & FEEDBACKS --- */}
                             {activeTab === 'orders' && (
                                 <Card noPadding>
                                     <div className="overflow-x-auto">
@@ -743,4 +854,4 @@ export default function AdminDashboard() {
       </div>
     </div>
   );
-}
+};

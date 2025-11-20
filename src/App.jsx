@@ -206,7 +206,7 @@ const Navbar = () => {
                 <Link to="/admin/login" className={`hidden md:flex px-5 py-2.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all ${scrolled ? 'bg-gray-100 text-gray-600 hover:bg-emerald-50 hover:text-emerald-600' : 'bg-white/60 text-emerald-800 hover:bg-white backdrop-blur-sm'}`}>
                   Admin
                 </Link>
-                <a href="https://wa.me/628973170628" target="_blank" className="hidden md:flex bg-[#064e3b] text-white px-6 py-2.5 rounded-full text-sm font-bold shadow-lg hover:shadow-emerald-900/20 hover:bg-emerald-800 hover:-translate-y-0.5 transition-all items-center gap-2 group">
+                <a href="https://wa.me/6285832841485" target="_blank" className="hidden md:flex bg-[#064e3b] text-white px-6 py-2.5 rounded-full text-sm font-bold shadow-lg hover:shadow-emerald-900/20 hover:bg-emerald-800 hover:-translate-y-0.5 transition-all items-center gap-2 group">
                    Pesan <ArrowUpRight size={16} className="group-hover:rotate-45 transition-transform"/>
                 </a>
                 {/* Mobile Toggle */}
@@ -241,7 +241,7 @@ const Navbar = () => {
                 ))}
              </div>
              <div className="mt-auto mb-12 space-y-4">
-                <a href="https://wa.me/628973170628" className="flex items-center justify-center w-full py-4 bg-[#064e3b] text-white rounded-2xl font-bold text-lg shadow-xl">
+                <a href="https://wa.me/6285832841485" className="flex items-center justify-center w-full py-4 bg-[#064e3b] text-white rounded-2xl font-bold text-lg shadow-xl">
                    Pesan Sekarang
                 </a>
                 <Link to="/admin/login" onClick={() => setMobileOpen(false)} className="block text-center text-sm font-bold text-gray-400 uppercase tracking-widest">
@@ -398,10 +398,10 @@ const HomePage = () => {
                   <span className="text-xs font-extrabold text-emerald-800 uppercase tracking-widest">#1 Healthy Food on Campus</span>
                </motion.div>
 
-               <motion.h1 variants={fadeInUp} className="text-5xl md:text-7xl lg:text-8xl font-extrabold text-emerald-950 leading-[0.95] tracking-tighter">
-                  Eat Good, <br/>
+               <motion.h1 variants={fadeInUp} className="text-5xl md:text-7xl lg:text-7xl font-extrabold text-emerald-950 leading-[0.95] tracking-tighter">
+                  Boost Your Foods, <br/>
                   <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-600 via-emerald-500 to-amber-500 animate-gradient-x">
-                     Feel Good.
+                     Upgrade your Life.
                   </span>
                </motion.h1>
                
@@ -723,12 +723,12 @@ const AboutPage = () => {
                     <h2 className="text-4xl md:text-5xl font-extrabold text-emerald-950 leading-tight">Dari Tugas Kuliah Menjadi <span className="text-emerald-600 underline decoration-amber-400 decoration-4 underline-offset-4">Passion.</span></h2>
                     <div className="space-y-6 text-gray-500 text-lg leading-relaxed">
                         <p>Upgradeats bermula dari keresahan kami: "Kenapa makanan sehat di kampus mahal atau rasanya hambar?"</p>
-                        <p>Sebagai Kelompok 1 Kewirausahaan, kami bereksperimen di dapur kosan sempit, mencari supplier hidroponik lokal, hingga akhirnya menemukan formula rasa yang pas dan harga yang masuk akal.</p>
+                        <p>Sebagai Kelompok 1 Kewirausahaan, kami bereksperimen di dapur rumahan, mencari supplier lokal yang berkualitas, hingga akhirnya menemukan formula rasa yang pas dan harga yang ramah di kantong.</p>
                     </div>
                 </div>
                 <div className="relative">
                     <div className="absolute inset-0 bg-emerald-600 rounded-[3rem] rotate-6 opacity-20 scale-95 blur-lg"></div>
-                    <img src="https://images.unsplash.com/photo-1522071820081-009f0129c71c?q=80&w=800&auto=format&fit=crop" alt="Team Working" className="relative rounded-[3rem] shadow-2xl rotate-3 border-8 border-white grayscale hover:grayscale-0 transition-all duration-500 transform hover:rotate-0"/>
+                    <img src="/fotoku.jpg" alt="Team Working" className="relative rounded-[3rem] shadow-2xl rotate-3 border-8 border-white grayscale hover:grayscale-0 transition-all duration-500 transform hover:rotate-0"/>
                 </div>
             </div>
          </div>
@@ -822,7 +822,7 @@ const ProductDetailPage = () => {
     });
     
     const text = `Halo Upgradeats!%0A%0ASaya *${customerName}* mau pesan:%0AMenu: *${product.name}*%0AJumlah: *${qty}*%0ATotal: *Rp ${totalPrice}*%0A%0AMohon diproses ya!`;
-    window.open(`https://wa.me/628973170628?text=${text}`, '_blank');
+    window.open(`https://wa.me/6285832841485?text=${text}`, '_blank');
   };
 
   return (
