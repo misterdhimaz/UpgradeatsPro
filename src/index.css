@@ -1,0 +1,41 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-primary: #022c22;   /* Emerald 950 */
+  --color-accent: #d97706;    /* Amber 600 */
+  --color-bg: #FDFCF8;        /* Creamy White */
+}
+
+body {
+  font-family: 'Outfit', sans-serif;
+  background-color: var(--color-bg);
+  color: #1e293b; /* Slate 800 */
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Seleksi Teks Mewah (Emas) */
+::selection {
+  background-color: #fcd34d; /* Amber 300 */
+  color: #064e3b;
+}
+
+/* Scrollbar Minimalis */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+/* Animasi Gradient Text Halus */
+.text-gradient-gold {
+  background: linear-gradient(to right, #059669, #d97706);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
