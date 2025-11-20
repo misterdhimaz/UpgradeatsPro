@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 
 // ==========================================
-// 1. UTILITY & HELPER FUNCTIONS
+// 1. UTILS
 // ==========================================
 
 const formatCurrency = (value) => {
@@ -27,8 +27,18 @@ const formatDate = (dateString) => {
 };
 
 // ==========================================
-// 2. REUSABLE UI COMPONENTS
+// 2. UI COMPONENTS
 // ==========================================
+
+const Card = ({ children, className = "", noPadding = false }) => (
+  <motion.div 
+    initial={{ opacity: 0, y: 20 }} 
+    animate={{ opacity: 1, y: 0 }}
+    className={`bg-white rounded-[2rem] border border-gray-100 shadow-xl shadow-emerald-900/5 relative overflow-hidden ${noPadding ? '' : 'p-8'} ${className}`}
+  >
+    {children}
+  </motion.div>
+);
 
 const Badge = ({ children, color = "emerald", icon: Icon }) => {
   const colors = {
@@ -52,7 +62,7 @@ const Button = ({ children, onClick, variant = "primary", className = "", icon: 
     secondary: "bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 hover:border-gray-300",
     danger: "bg-red-50 text-red-600 border border-red-100 hover:bg-red-100",
     ghost: "bg-transparent text-gray-500 hover:bg-gray-100",
-    gold: "bg-yellow-400 text-emerald-950 hover:bg-yellow-500 shadow-lg shadow-yellow-400/30"
+    gold: "bg-amber-400 text-emerald-950 hover:bg-amber-500 shadow-lg shadow-amber-400/30"
   };
 
   return (
@@ -139,7 +149,7 @@ const DynamicIcon = ({ name }) => {
 };
 
 // ==========================================
-// 3. MAIN DASHBOARD
+// 3. MAIN DASHBOARD COMPONENT
 // ==========================================
 
 export default function AdminDashboard() {
@@ -148,7 +158,7 @@ export default function AdminDashboard() {
   // Global State
   const [activeTab, setActiveTab] = useState('overview');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isAuthChecking, setIsAuthChecking] = useState(true); // New: Loading Auth State
+  const [isAuthChecking, setIsAuthChecking] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [toast, setToast] = useState(null);
 
@@ -172,7 +182,6 @@ export default function AdminDashboard() {
   // 1. INIT & AUTH CHECK
   useEffect(() => {
     const checkAuthAndFetch = async () => {
-      // Cek Session
       const { data: { session } } = await supabase.auth.getSession();
       
       if (!session) {
@@ -180,47 +189,52 @@ export default function AdminDashboard() {
         return;
       }
       
-      setIsAuthChecking(false); // Auth OK
-      await fetchAllData(); // Fetch Data setelah Auth OK
+      setIsAuthChecking(false);
+      await fetchAllData();
     };
     
     checkAuthAndFetch();
   }, []);
 
+  // 2. FETCH DATA (ROBUST VERSION)
   const fetchAllData = async () => {
     setIsLoading(true);
     try {
-      const [prod, ord, team, feat, feed] = await Promise.all([
-        supabase.from('products').select('*').order('id'),
-        supabase.from('orders').select('*').order('created_at', { ascending: false }),
-        supabase.from('team_members').select('*').order('id'),
-        supabase.from('features').select('*').order('id'),
-        supabase.from('feedbacks').select('*').order('created_at', { ascending: false })
-      ]);
+      // Fetch satu-satu agar jika satu tabel error, yang lain tetap muncul (Safe Mode)
+      const { data: prod } = await supabase.from('products').select('*').order('id');
+      const { data: ord } = await supabase.from('orders').select('*').order('created_at', { ascending: false });
+      const { data: team } = await supabase.from('team_members').select('*').order('id');
+      const { data: feat } = await supabase.from('features').select('*').order('id');
+      const { data: feed } = await supabase.from('feedbacks').select('*').order('created_at', { ascending: false });
 
-      const products = prod.data || [];
-      const orders = ord.data || [];
-      
+      const safeOrders = ord || [];
+      const safeProducts = prod || [];
+
       setDataStore({
-        products,
-        orders,
-        teams: team.data || [],
-        features: feat.data || [],
-        feedbacks: feed.data || []
+        products: safeProducts,
+        orders: safeOrders,
+        teams: team || [],
+        features: feat || [],
+        feedbacks: feed || []
       });
 
       let totalRev = 0;
-      orders.forEach(o => totalRev += parseInt(o.total_price.replace(/[^0-9]/g, '') || 0));
-      setStats({ revenue: totalRev, totalOrders: orders.length, totalMenus: products.length });
+      safeOrders.forEach(o => totalRev += parseInt(o.total_price?.replace(/[^0-9]/g, '') || 0));
+      setStats({ 
+        revenue: totalRev, 
+        totalOrders: safeOrders.length, 
+        totalMenus: safeProducts.length 
+      });
 
     } catch (error) {
-      showToast("Gagal memuat data: " + error.message, "error");
+      console.error("Fetch Error:", error);
+      showToast("Gagal memuat sebagian data. Cek konsol.", "error");
     } finally {
       setIsLoading(false);
     }
   };
 
-  // 2. HELPERS
+  // 3. ACTIONS & HELPERS
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3000);
@@ -243,21 +257,19 @@ export default function AdminDashboard() {
     else setSelectedItems([...selectedItems, id]);
   };
 
-  // 3. CRUD OPERATIONS
+  // 4. CRUD OPERATIONS
   const handleSubmit = async (e, table) => {
     e.preventDefault();
     const payload = { ...formData };
     
-    let error;
+    let result;
     if (modalConfig.data?.id) {
-       const res = await supabase.from(table).update(payload).eq('id', modalConfig.data.id);
-       error = res.error;
+       result = await supabase.from(table).update(payload).eq('id', modalConfig.data.id);
     } else {
-       const res = await supabase.from(table).insert([payload]);
-       error = res.error;
+       result = await supabase.from(table).insert([payload]);
     }
 
-    if (error) showToast(error.message, 'error');
+    if (result.error) showToast(result.error.message, 'error');
     else {
       showToast('Data berhasil disimpan!', 'success');
       closeModal();
@@ -303,6 +315,7 @@ export default function AdminDashboard() {
     if (error) showToast('Gagal update status', 'error');
     else {
         showToast(`Status order #${id} diubah ke ${newStatus}`, 'success');
+        // Optimistic update
         setDataStore(prev => ({
             ...prev,
             orders: prev.orders.map(o => o.id === id ? { ...o, status: newStatus } : o)
@@ -313,7 +326,7 @@ export default function AdminDashboard() {
     }
   };
 
-  // 4. FILTERING & PAGINATION
+  // 5. FILTERING & PAGINATION
   const getFilteredData = () => {
     let data = [];
     if (activeTab === 'menu') data = dataStore.products;
@@ -340,7 +353,7 @@ export default function AdminDashboard() {
 
   useEffect(() => { setCurrentPage(1); setSearchTerm(""); setSelectedItems([]); }, [activeTab]);
 
-  // 5. RENDER UI HELPERS
+  // 6. UI HELPERS
   const SidebarLink = ({ id, icon, label }) => (
     <button 
       onClick={() => { setActiveTab(id); setIsMobileMenuOpen(false); }}
@@ -353,7 +366,6 @@ export default function AdminDashboard() {
     </button>
   );
 
-  // --- LOADING SCREEN FOR AUTH ---
   if (isAuthChecking) {
       return (
         <div className="flex h-screen items-center justify-center bg-[#FDFCF8]">
@@ -380,20 +392,16 @@ export default function AdminDashboard() {
             modalConfig.data ? `Edit ${modalConfig.type}` : `Tambah ${modalConfig.type}`
           }
         >
-          {/* 1. ORDER DETAIL (STRUK STYLE) */}
+          {/* 1. ORDER DETAIL */}
           {modalConfig.type === 'order_detail' && modalConfig.data && (
              <div className="flex flex-col h-full">
                 <div className="bg-gray-50 p-6 rounded-xl border border-gray-200 font-mono text-sm relative overflow-hidden">
-                    {/* Struk Decoration */}
                     <div className="absolute -bottom-3 left-0 w-full h-6 bg-white" style={{ maskImage: 'radial-gradient(circle, transparent 50%, black 50%)', maskSize: '20px 20px', maskRepeat: 'repeat-x' }}></div>
-
                     <div className="text-center border-b-2 border-dashed border-gray-300 pb-4 mb-4">
                         <h2 className="text-xl font-black text-gray-800 uppercase tracking-widest">Upgradeats</h2>
-                        <p className="text-xs text-gray-500">Gedung Serbaguna Kampus</p>
                         <p className="text-xs text-gray-500">Order ID: #{modalConfig.data.id}</p>
                         <p className="text-xs text-gray-500">{new Date(modalConfig.data.created_at).toLocaleString()}</p>
                     </div>
-
                     <div className="space-y-4 mb-4">
                         <div className="flex justify-between">
                             <span className="text-gray-600">Customer:</span>
@@ -411,15 +419,12 @@ export default function AdminDashboard() {
                             <span>{modalConfig.data.total_price}</span>
                         </div>
                     </div>
-
                     <div className="text-center border-t-2 border-dashed border-gray-300 pt-4 mt-4">
                         <div className={`inline-block px-3 py-1 rounded text-xs font-bold uppercase border ${modalConfig.data.status === 'Selesai' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : modalConfig.data.status === 'Dibatalkan' ? 'bg-red-100 text-red-700 border-red-200' : 'bg-yellow-100 text-yellow-700 border-yellow-200'}`}>
                             {modalConfig.data.status}
                         </div>
-                        <p className="text-xs text-gray-400 mt-2">Terima kasih telah berbelanja!</p>
                     </div>
                 </div>
-
                 <div className="pt-6 mt-auto flex flex-col gap-3">
                     <div className="flex gap-3 justify-end">
                          {modalConfig.data.status === 'Pending' && (
@@ -427,9 +432,6 @@ export default function AdminDashboard() {
                                 <Button variant="danger" icon={XCircle} onClick={() => handleUpdateOrderStatus(modalConfig.data.id, 'Dibatalkan')}>Tolak</Button>
                                 <Button icon={CheckCircle} onClick={() => handleUpdateOrderStatus(modalConfig.data.id, 'Selesai')}>Terima & Selesai</Button>
                              </>
-                        )}
-                        {modalConfig.data.status !== 'Pending' && (
-                            <p className="text-sm text-gray-400 italic w-full text-center">Pesanan ini telah {modalConfig.data.status.toLowerCase()}.</p>
                         )}
                     </div>
                     <Button variant="secondary" icon={Printer} onClick={() => window.print()} className="w-full">Cetak Struk</Button>
@@ -503,7 +505,6 @@ export default function AdminDashboard() {
         ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
       `}>
         <div className="p-6 overflow-y-auto custom-scrollbar">
-            {/* Logo */}
             <div className="flex items-center gap-3 mb-10 px-2 mt-4">
                 <div className="w-10 h-10 bg-gradient-to-br from-amber-400 to-amber-600 rounded-xl flex items-center justify-center text-emerald-950 shadow-lg shadow-amber-500/20">
                     <Sparkles size={20} fill="currentColor"/>
@@ -514,7 +515,6 @@ export default function AdminDashboard() {
                 </div>
             </div>
 
-            {/* Navigation */}
             <nav className="space-y-1">
                 <div className="px-4 mb-3 text-[10px] font-bold text-emerald-600 uppercase tracking-widest">Main</div>
                 <SidebarLink id="overview" icon={<LayoutDashboard size={18}/>} label="Overview" />
@@ -531,7 +531,6 @@ export default function AdminDashboard() {
             </nav>
         </div>
         
-        {/* User Profile */}
         <div className="p-4 border-t border-white/5 bg-[#01221a] m-4 rounded-2xl flex items-center gap-3 cursor-pointer hover:bg-white/5 transition">
              <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-emerald-400 to-emerald-600 flex items-center justify-center text-white font-bold shadow-lg">SA</div>
              <div className="flex-1 min-w-0">
@@ -555,10 +554,8 @@ export default function AdminDashboard() {
             <div className="flex items-center gap-4">
                 <div className="relative hidden md:block">
                     <input 
-                        type="text" 
-                        placeholder="Cari data..." 
-                        value={searchTerm} 
-                        onChange={(e) => setSearchTerm(e.target.value)}
+                        type="text" placeholder="Cari data..." 
+                        value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
                         className="pl-10 pr-4 py-2 bg-gray-100 rounded-full text-sm font-medium text-gray-700 focus:bg-white focus:ring-2 focus:ring-emerald-200 border border-transparent outline-none transition-all w-64"
                     />
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16}/>
@@ -567,7 +564,7 @@ export default function AdminDashboard() {
             </div>
         </header>
 
-        {/* CONTENT BODY */}
+        {/* CONTENT */}
         <main className="flex-1 overflow-y-auto p-6 md:p-10 scroll-smooth bg-[#FDFCF8]">
             <div className="max-w-7xl mx-auto pb-24">
                 <AnimatePresence mode="wait">
@@ -579,10 +576,9 @@ export default function AdminDashboard() {
                     ) : (
                         <motion.div initial={{opacity:0, y:10}} animate={{opacity:1, y:0}} exit={{opacity:0}} transition={{duration:0.4}}>
                             
-                            {/* --- 1. OVERVIEW --- */}
+                            {/* --- OVERVIEW --- */}
                             {activeTab === 'overview' && (
                                 <div className="space-y-8">
-                                    {/* Welcome Banner */}
                                     <div className="bg-[#022c22] rounded-[2.5rem] p-10 text-white shadow-2xl relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-8">
                                         <div className="relative z-10 max-w-xl space-y-4">
                                             <Badge color="emerald" icon={Sparkles}>System Online v2.4</Badge>
@@ -601,7 +597,6 @@ export default function AdminDashboard() {
                                         </div>
                                     </div>
 
-                                    {/* Stat Cards - Clean & Modern */}
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                          {[
                                             { label: "Pendapatan", val: formatCurrency(stats.revenue), icon: DollarSign, color: "text-emerald-600", bg: "bg-emerald-50" },
@@ -617,39 +612,10 @@ export default function AdminDashboard() {
                                             </motion.div>
                                          ))}
                                     </div>
-
-                                    {/* Quick Actions */}
-                                    <div className="grid md:grid-cols-2 gap-8">
-                                        <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100">
-                                            <h3 className="font-bold text-xl mb-6 flex items-center gap-2"><Clock size={20} className="text-gray-400"/> Aktivitas Terbaru</h3>
-                                            <div className="space-y-6 relative before:absolute before:left-2 before:h-full before:w-0.5 before:bg-gray-100">
-                                                {orders.slice(0, 3).map((o, i) => (
-                                                    <div key={i} className="relative pl-8">
-                                                        <div className="absolute left-0 top-1 w-4 h-4 rounded-full bg-emerald-500 border-4 border-white shadow-sm"></div>
-                                                        <p className="text-sm font-bold text-gray-800">Pesanan Baru #{o.id}</p>
-                                                        <p className="text-xs text-gray-500 mt-1">Diterima dari {o.customer_name}.</p>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                        <div className="bg-[#fffbeb] p-8 rounded-[2.5rem] border border-amber-100">
-                                            <h3 className="font-bold text-xl mb-4 text-amber-900">Quick Actions</h3>
-                                            <div className="grid grid-cols-2 gap-4">
-                                                <button onClick={()=>openModal('Product')} className="p-4 bg-white rounded-2xl shadow-sm border border-amber-100 hover:shadow-md transition text-left group">
-                                                    <Plus className="mb-2 text-amber-500 group-hover:scale-110 transition"/>
-                                                    <p className="font-bold text-gray-800">Tambah Menu</p>
-                                                </button>
-                                                <button onClick={()=>openModal('Team')} className="p-4 bg-white rounded-2xl shadow-sm border border-amber-100 hover:shadow-md transition text-left group">
-                                                    <User className="mb-2 text-amber-500 group-hover:scale-110 transition"/>
-                                                    <p className="font-bold text-gray-800">Tambah Staff</p>
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
                                 </div>
                             )}
 
-                            {/* --- 2. CRUD TABS (Menu, Team, Features) --- */}
+                            {/* --- CRUD TABS --- */}
                             {['menu', 'team', 'features'].includes(activeTab) && (
                                 <div className="space-y-6">
                                     <div className="flex justify-between items-center bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
@@ -694,7 +660,6 @@ export default function AdminDashboard() {
                                                     <div className="flex-1 min-w-0 text-center md:text-left">
                                                         <h4 className="font-extrabold text-gray-800 text-lg truncate">{item.name || item.title}</h4>
                                                         <p className="text-emerald-600 font-bold text-sm">{activeTab === 'menu' ? item.price : (item.role || 'Fitur Unggulan')}</p>
-                                                        {viewMode === 'grid' && <p className="text-gray-400 text-xs mt-2 line-clamp-2">{item.description || item.text || item.quote}</p>}
                                                     </div>
 
                                                     <div className={`flex gap-2 ${viewMode === 'grid' ? 'mt-6 pt-4 border-t border-gray-50 justify-center' : 'ml-auto'}`}>
@@ -705,8 +670,7 @@ export default function AdminDashboard() {
                                             ))}
                                         </div>
                                     )}
-
-                                    {/* Pagination */}
+                                    {/* Pagination Controls */}
                                     <div className="flex justify-center gap-4 mt-8 items-center">
                                         <button disabled={currentPage===1} onClick={()=>setCurrentPage(p=>p-1)} className="p-2 rounded-full hover:bg-gray-100 disabled:opacity-30"><ChevronLeft/></button>
                                         <span className="text-sm font-bold text-gray-500">Halaman {currentPage} dari {pageCount}</span>
@@ -715,39 +679,23 @@ export default function AdminDashboard() {
                                 </div>
                             )}
 
-                            {/* --- 3. ORDERS TAB --- */}
+                            {/* --- ORDERS & FEEDBACKS TABS --- */}
                             {activeTab === 'orders' && (
                                 <Card noPadding>
                                     <div className="overflow-x-auto">
                                         <table className="w-full text-left min-w-[900px]">
                                             <thead className="bg-gray-50/50 border-b border-gray-100">
-                                                <tr>
-                                                    {['ID', 'Pelanggan', 'Menu Item', 'Total', 'Status', 'Aksi'].map(h => (
-                                                        <th key={h} className="p-6 text-xs font-extrabold text-gray-400 uppercase tracking-widest">{h}</th>
-                                                    ))}
-                                                </tr>
+                                                <tr>{['ID', 'Pelanggan', 'Menu Item', 'Total', 'Status', 'Aksi'].map(h => <th key={h} className="p-6 text-xs font-extrabold text-gray-400 uppercase tracking-widest">{h}</th>)}</tr>
                                             </thead>
                                             <tbody className="divide-y divide-gray-50">
                                                 {paginatedData.map(order => (
                                                     <tr key={order.id} onClick={() => openModal('order_detail', order)} className="hover:bg-emerald-50/30 transition-colors cursor-pointer group">
                                                         <td className="p-6 font-mono text-xs text-gray-500">#{order.id}</td>
-                                                        <td className="p-6">
-                                                            <div className="font-bold text-gray-800">{order.customer_name}</div>
-                                                            <div className="text-xs text-gray-400">{formatDate(order.created_at)}</div>
-                                                        </td>
-                                                        <td className="p-6">
-                                                            <span className="font-medium text-gray-700">{order.product_name}</span>
-                                                            <span className="ml-2 text-[10px] bg-gray-100 px-2 py-0.5 rounded font-bold text-gray-500">x{order.qty}</span>
-                                                        </td>
+                                                        <td className="p-6"><div className="font-bold text-gray-800">{order.customer_name}</div><div className="text-xs text-gray-400">{formatDate(order.created_at)}</div></td>
+                                                        <td className="p-6"><span className="font-medium text-gray-700">{order.product_name}</span><span className="ml-2 text-[10px] bg-gray-100 px-2 py-0.5 rounded font-bold text-gray-500">x{order.qty}</span></td>
                                                         <td className="p-6 font-bold text-emerald-600">{order.total_price}</td>
-                                                        <td className="p-6">
-                                                            <Badge color={order.status === 'Selesai' ? 'emerald' : order.status === 'Dibatalkan' ? 'red' : 'yellow'}>
-                                                                {order.status}
-                                                            </Badge>
-                                                        </td>
-                                                        <td className="p-6 text-right">
-                                                            <ChevronRight size={18} className="text-gray-300 group-hover:text-emerald-500 transition"/>
-                                                        </td>
+                                                        <td className="p-6"><Badge color={order.status === 'Selesai' ? 'emerald' : order.status === 'Dibatalkan' ? 'red' : 'yellow'}>{order.status}</Badge></td>
+                                                        <td className="p-6 text-right"><ChevronRight size={18} className="text-gray-300 group-hover:text-emerald-500 transition"/></td>
                                                     </tr>
                                                 ))}
                                             </tbody>
@@ -756,7 +704,6 @@ export default function AdminDashboard() {
                                 </Card>
                             )}
 
-                            {/* --- 4. FEEDBACKS TAB --- */}
                             {activeTab === 'feedbacks' && (
                                 <div className="grid md:grid-cols-2 gap-6">
                                      {paginatedData.map(fb => (
@@ -764,9 +711,7 @@ export default function AdminDashboard() {
                                             <div className="absolute top-8 right-8 text-gray-200 group-hover:text-amber-400 transition-colors"><MessageSquare size={32}/></div>
                                             <p className="text-gray-800 text-lg italic font-medium leading-relaxed pr-12 mb-6">"{fb.message}"</p>
                                             <div className="flex items-center justify-between pt-6 border-t border-gray-50">
-                                                <p className="text-xs text-gray-400 font-bold uppercase tracking-wider flex items-center gap-2">
-                                                    <Clock size={14}/> {formatDate(fb.created_at)}
-                                                </p>
+                                                <p className="text-xs text-gray-400 font-bold uppercase tracking-wider flex items-center gap-2"><Clock size={14}/> {formatDate(fb.created_at)}</p>
                                                 <button onClick={()=>handleDelete('feedbacks', fb.id)} className="p-2 text-red-300 hover:text-red-500 hover:bg-red-50 rounded-full transition"><Trash size={18}/></button>
                                             </div>
                                         </div>
@@ -774,38 +719,21 @@ export default function AdminDashboard() {
                                 </div>
                             )}
 
-                             {/* --- 5. SETTINGS TAB --- */}
-                             {activeTab === 'settings' && (
+                            {/* --- SETTINGS --- */}
+                            {activeTab === 'settings' && (
                                 <div className="max-w-2xl mx-auto space-y-6">
                                     <Card>
                                         <h3 className="text-xl font-bold mb-6 border-b border-gray-100 pb-4">Pengaturan Akun</h3>
                                         <div className="flex items-center gap-6 mb-8">
                                             <div className="w-24 h-24 bg-emerald-900 rounded-full flex items-center justify-center text-white text-3xl font-bold shadow-xl border-4 border-emerald-100">SA</div>
-                                            <div>
-                                                <h4 className="font-bold text-lg">Super Admin</h4>
-                                                <p className="text-gray-500 mb-2">admin@upgradeats.id</p>
-                                                <Button variant="secondary" className="!py-1.5 !px-3 text-xs">Ubah Foto</Button>
-                                            </div>
+                                            <div><h4 className="font-bold text-lg">Super Admin</h4><p className="text-gray-500 mb-2">admin@upgradeats.id</p><Button variant="secondary" className="!py-1.5 !px-3 text-xs">Ubah Foto</Button></div>
                                         </div>
-                                        <div className="grid gap-4">
-                                            <InputField label="Nama Tampilan" defaultValue="Super Admin" />
-                                            <InputField label="Email" defaultValue="admin@upgradeats.id" disabled />
-                                        </div>
-                                        <div className="mt-6 flex justify-end">
-                                            <Button>Simpan Perubahan</Button>
-                                        </div>
+                                        <div className="grid gap-4"><InputField label="Nama Tampilan" defaultValue="Super Admin" /><InputField label="Email" defaultValue="admin@upgradeats.id" disabled /></div>
+                                        <div className="mt-6 flex justify-end"><Button>Simpan Perubahan</Button></div>
                                     </Card>
-                                    <Card>
-                                        <div className="flex justify-between items-center">
-                                            <div>
-                                                <h3 className="font-bold text-gray-800">Keamanan</h3>
-                                                <p className="text-sm text-gray-500">Ubah password dan pengaturan login</p>
-                                            </div>
-                                            <Button variant="secondary" icon={Lock}>Ganti Password</Button>
-                                        </div>
-                                    </Card>
+                                    <Card><div className="flex justify-between items-center"><div><h3 className="font-bold text-gray-800">Keamanan</h3><p className="text-sm text-gray-500">Ubah password dan pengaturan login</p></div><Button variant="secondary" icon={Lock}>Ganti Password</Button></div></Card>
                                 </div>
-                             )}
+                            )}
 
                         </motion.div>
                     )}
