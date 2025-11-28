@@ -203,9 +203,7 @@ const Navbar = () => {
 
             {/* Actions */}
             <div className="flex items-center gap-3">
-                <Link to="/admin/login" className={`hidden md:flex px-5 py-2.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all ${scrolled ? 'bg-gray-100 text-gray-600 hover:bg-emerald-50 hover:text-emerald-600' : 'bg-white/60 text-emerald-800 hover:bg-white backdrop-blur-sm'}`}>
-                  Admin
-                </Link>
+                
                 <a href="https://wa.me/6285832841485" target="_blank" className="hidden md:flex bg-[#064e3b] text-white px-6 py-2.5 rounded-full text-sm font-bold shadow-lg hover:shadow-emerald-900/20 hover:bg-emerald-800 hover:-translate-y-0.5 transition-all items-center gap-2 group">
                    Pesan <ArrowUpRight size={16} className="group-hover:rotate-45 transition-transform"/>
                 </a>
